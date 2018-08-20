@@ -11,6 +11,7 @@ import {
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
+import * as net from 'net';
 const { Subject } = require('await-notify');
 
 
@@ -22,7 +23,7 @@ const { Subject } = require('await-notify');
  */
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	/** An absolute path to the "program" to debug. */
-	program: string;
+	program?: string;
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
 	/** enable logging the Debug Adapter Protocol */
@@ -122,15 +123,29 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		logger.setup(Logger.LogLevel.Verbose, false);
 
 		// wait until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
 		// start the program in the runtime
-		this._runtime.start(args.program, !!args.stopOnEntry);
+		//this._runtime.start(args.program ? args.program : '', !!args.stopOnEntry);
 
-		this.sendResponse(response);
+		logger.log('Connecting...');
+		let socket = net.connect(9191, 'localhost', () => {
+			logger.log('Connected');
+			this.sendResponse(response);
+			socket.write('Hello');
+		});
+
+		socket.on('data', (data) => {
+
+		});
+
+		socket.on('end', () => {
+
+		});
 	}
 
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {

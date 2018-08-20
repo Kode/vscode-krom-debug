@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// register a configuration provider for 'mock' debug type
 	const provider = new MockConfigurationProvider()
-	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('mock', provider));
+	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('krom', provider));
 	context.subscriptions.push(provider);
 }
 
@@ -57,11 +57,11 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 			}
 		}
 
-		if (!config.program) {
-			return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
-				return undefined;	// abort launch
-			});
-		}
+		//if (!config.program) {
+		//	return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
+		//		return undefined;	// abort launch
+		//	});
+		//}
 
 		if (EMBED_DEBUG_ADAPTER) {
 			// start port listener on launch of first debug session
