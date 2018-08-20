@@ -12,8 +12,8 @@ import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
 import * as net from 'net';
+import * as path from 'path';
 const { Subject } = require('await-notify');
-
 
 /**
  * This interface describes the mock-debug specific launch attributes
@@ -28,9 +28,17 @@ interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	stopOnEntry?: boolean;
 	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
+	projectDir: string;
 }
 
 export class MockDebugSession extends LoggingDebugSession {
+	private static DEBUGGER_MESSAGE_BREAKPOINT = 0;
+	private static DEBUGGER_MESSAGE_PAUSE = 1;
+	private static DEBUGGER_MESSAGE_STACKTRACE = 2;
+
+	private static IDE_MESSAGE_STACKTRACE = 0;
+	private static IDE_MESSAGE_BREAK = 1;
+	//private static IDE_MESSAGE_VARIABLES = 2;
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
@@ -41,6 +49,10 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _variableHandles = new Handles<string>();
 
 	private _configurationDone = new Subject();
+
+	private socket: net.Socket;
+
+	private stackTraceResponse: DebugProtocol.StackTraceResponse | null = null;
 
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
@@ -129,46 +141,102 @@ export class MockDebugSession extends LoggingDebugSession {
 		// wait until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
-		// start the program in the runtime
-		//this._runtime.start(args.program ? args.program : '', !!args.stopOnEntry);
-
 		logger.log('Connecting...');
-		let socket = net.connect(9191, 'localhost', () => {
+		this.socket = net.connect(9191, 'localhost', () => {
 			logger.log('Connected');
 			this.sendResponse(response);
-			socket.write('Hello');
+			//this.socket.write('Hello');
 		});
 
-		socket.on('data', (data) => {
-
+		this.socket.on('data', (data) => {
+			logger.log('Receiving data.');
+			if (data.readInt32LE(0) === MockDebugSession.IDE_MESSAGE_STACKTRACE) {
+				let ii = 4;
+				logger.log('Receiving a stack trace');
+				let frames: any[] = [];
+				let length = data.readInt32LE(ii); ii += 4;
+				logger.log('Stack frame length is ' + length);
+				for (let i = 0; i < length; ++i) {
+					const index = data.readInt32LE(ii); ii += 4;
+					const scriptId = data.readInt32LE(ii); ii += 4;
+					const line = data.readInt32LE(ii); ii += 4;
+					const column = data.readInt32LE(ii); ii += 4;
+					const sourceLength = data.readInt32LE(ii); ii += 4;
+					const functionHandle = data.readInt32LE(ii); ii += 4;
+					const stringLength = data.readInt32LE(ii); ii += 4;
+					let str = '';
+					for (let j = 0; j < stringLength; ++j) {
+						str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
+					}
+					frames.push({
+						index: index,
+						scriptId: scriptId,
+						line: line,
+						column: column,
+						sourceLength: sourceLength,
+						functionHandle: functionHandle,
+						sourceText: str
+					});
+				}
+				if (this.stackTraceResponse) {
+					logger.log('Responding with the stack trace');
+					let stackFrames: StackFrame[] = [];
+					for (let frame of frames) {
+						let khaPath = '';
+						if (args.projectDir) {
+							khaPath = path.join(args.projectDir, 'build', 'krom', 'krom.js');
+						}
+						stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', khaPath), frame.line, frame.column));
+					}
+					this.stackTraceResponse.body = {
+						stackFrames: stackFrames,
+						totalFrames: frames.length
+					};
+					this.sendResponse(this.stackTraceResponse);
+					this.stackTraceResponse = null;
+				}
+			}
+			else if (data.readInt32LE(0) === MockDebugSession.IDE_MESSAGE_BREAK) {
+				logger.log('Receiving a breakpoint');
+				this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+			}
 		});
 
-		socket.on('end', () => {
+		this.socket.on('end', () => {
 
 		});
 	}
 
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
 
-		const path = <string>args.source.path;
+		//const path = <string>args.source.path;
 		const clientLines = args.lines || [];
 
-		// clear all breakpoints for this file
-		this._runtime.clearBreakpoints(path);
-
-		// set and verify breakpoint locations
 		const actualBreakpoints = clientLines.map(l => {
-			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
+			let line = this.convertClientLineToDebugger(l);
+
+			let array = new Int32Array(2);
+			array[0] = MockDebugSession.DEBUGGER_MESSAGE_BREAKPOINT;
+			array[1] = line;
+			this.socket.write(Buffer.from(array.buffer));
+
+			let verified = true;
+			let id = 0;
 			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
 			bp.id= id;
 			return bp;
 		});
 
-		// send back the actual breakpoint positions
 		response.body = {
 			breakpoints: actualBreakpoints
 		};
 		this.sendResponse(response);
+	}
+
+	protected pauseRequest(response: DebugProtocol.PauseResponse, args: DebugProtocol.PauseArguments): void {
+		let array = new Int32Array(1);
+		array[0] = MockDebugSession.DEBUGGER_MESSAGE_PAUSE;
+		this.socket.write(Buffer.from(array.buffer));
 	}
 
 	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -183,18 +251,25 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
+		logger.log('Request stack trace.');
+		//const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
+		//const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+		//const endFrame = startFrame + maxLevels;
 
-		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
-		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-		const endFrame = startFrame + maxLevels;
+		//const stk = this._runtime.stack(startFrame, endFrame);
 
-		const stk = this._runtime.stack(startFrame, endFrame);
+		let array = new Int32Array(1);
+		array[0] = MockDebugSession.DEBUGGER_MESSAGE_STACKTRACE;
+		this.socket.write(Buffer.from(array.buffer));
 
-		response.body = {
-			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line))),
-			totalFrames: stk.count
+		/*response.body = {
+			//stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line))),
+			stackFrames: [new StackFrame(1, 'bla')],
+			//totalFrames: stk.count
+			totalFrames: 1
 		};
-		this.sendResponse(response);
+		this.sendResponse(response);*/
+		this.stackTraceResponse = response;
 	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
@@ -211,7 +286,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments): void {
-
+		logger.log('Request variables.');
 		const variables = new Array<DebugProtocol.Variable>();
 		const id = this._variableHandles.get(args.variablesReference);
 		if (id !== null) {
