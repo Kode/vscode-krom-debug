@@ -52,7 +52,7 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	private socket: net.Socket;
 
-	private stackTraceResponse: DebugProtocol.StackTraceResponse | null = null;
+	private pendingResponses: Map<number, DebugProtocol.Response> = new Map();
 
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
@@ -152,8 +152,9 @@ export class KromDebugSession extends LoggingDebugSession {
 			logger.log('Receiving data.');
 			if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_STACKTRACE) {
 				let ii = 4;
-				logger.log('Receiving a stack trace');
 				let frames: any[] = [];
+				let responseId = data.readInt32LE(ii); ii += 4;
+				logger.log('Receiving a stack trace for response ' + responseId + '.');
 				let length = data.readInt32LE(ii); ii += 4;
 				logger.log('Stack frame length is ' + length);
 				for (let i = 0; i < length; ++i) {
@@ -178,8 +179,11 @@ export class KromDebugSession extends LoggingDebugSession {
 						sourceText: str
 					});
 				}
-				if (this.stackTraceResponse) {
+				let response = this.pendingResponses.get(responseId);
+				if (response) {
+					this.pendingResponses.delete(responseId);
 					logger.log('Responding with the stack trace');
+
 					let stackFrames: StackFrame[] = [];
 					for (let frame of frames) {
 						let khaPath = '';
@@ -188,16 +192,15 @@ export class KromDebugSession extends LoggingDebugSession {
 						}
 						stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', khaPath), frame.line, frame.column));
 					}
-					this.stackTraceResponse.body = {
+					response.body = {
 						stackFrames: stackFrames,
 						totalFrames: frames.length
 					};
-					this.sendResponse(this.stackTraceResponse);
-					this.stackTraceResponse = null;
+					this.sendResponse(response);
 				}
 			}
 			else if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_BREAK) {
-				logger.log('Receiving a breakpoint');
+				logger.log('Receiving a breakpoint even.');
 				this.sendEvent(new StoppedEvent('breakpoint', KromDebugSession.THREAD_ID));
 			}
 		});
@@ -252,15 +255,16 @@ export class KromDebugSession extends LoggingDebugSession {
 	}
 
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-		logger.log('Request stack trace.');
+		logger.log('Request stack trace (seq ' + response.request_seq + ').');
 		//const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 		//const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 		//const endFrame = startFrame + maxLevels;
 
 		//const stk = this._runtime.stack(startFrame, endFrame);
 
-		let array = new Int32Array(1);
+		let array = new Int32Array(2);
 		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STACKTRACE;
+		array[1] = response.request_seq;
 		this.socket.write(Buffer.from(array.buffer));
 
 		/*response.body = {
@@ -270,11 +274,11 @@ export class KromDebugSession extends LoggingDebugSession {
 			totalFrames: 1
 		};
 		this.sendResponse(response);*/
-		this.stackTraceResponse = response;
+		this.pendingResponses.set(response.request_seq, response);
 	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
-
+		logger.log('Request scopes (seq ' + response.request_seq + ').');
 		const frameReference = args.frameId;
 		const scopes = new Array<Scope>();
 		scopes.push(new Scope("Local", this._variableHandles.create("local_" + frameReference), false));
@@ -287,7 +291,7 @@ export class KromDebugSession extends LoggingDebugSession {
 	}
 
 	protected variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments): void {
-		logger.log('Request variables.');
+		logger.log('Request variables (seq ' + response.request_seq + ').');
 		const variables = new Array<DebugProtocol.Variable>();
 		const id = this._variableHandles.get(args.variablesReference);
 		if (id !== null) {
