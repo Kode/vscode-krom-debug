@@ -37,10 +37,11 @@ export class KromDebugSession extends LoggingDebugSession {
 	private static DEBUGGER_MESSAGE_STEP_OVER = 4;
 	private static DEBUGGER_MESSAGE_STEP_IN = 5;
 	private static DEBUGGER_MESSAGE_STEP_OUT = 6;
+	private static DEBUGGER_MESSAGE_VARIABLES = 7;
 
 	private static IDE_MESSAGE_STACKTRACE = 0;
 	private static IDE_MESSAGE_BREAK = 1;
-	//private static IDE_MESSAGE_VARIABLES = 2;
+	private static IDE_MESSAGE_VARIABLES = 2;
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
@@ -195,7 +196,7 @@ export class KromDebugSession extends LoggingDebugSession {
 				let response = this.pendingResponses.get(responseId);
 				if (response) {
 					this.pendingResponses.delete(responseId);
-					logger.log('Responding with the stack trace');
+					logger.log('Responding with the stack trace.');
 
 					let stackFrames: StackFrame[] = [];
 					for (let frame of frames) {
@@ -208,8 +209,64 @@ export class KromDebugSession extends LoggingDebugSession {
 					this.sendResponse(response);
 				}
 			}
+			else if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_VARIABLES) {
+				let variables: any[] = [];
+				let ii = 4;
+				let responseId = data.readInt32LE(ii); ii += 4;
+				logger.log('Receiving variables for response ' + responseId + '.');
+				let length = data.readInt32LE(ii); ii += 4;
+				for (let i = 0; i < length; ++i) {
+					let stringLength = data.readInt32LE(ii); ii += 4;
+					let str = '';
+					for (let j = 0; j < stringLength; ++j) {
+						str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
+					}
+					let name = str;
+
+					stringLength = data.readInt32LE(ii); ii += 4;
+					str = '';
+					for (let j = 0; j < stringLength; ++j) {
+						str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
+					}
+					let type = str;
+
+					stringLength = data.readInt32LE(ii); ii += 4;
+					str = '';
+					for (let j = 0; j < stringLength; ++j) {
+						str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
+					}
+					let value = str;
+
+					variables.push({
+						name,
+						type,
+						value
+					})
+				}
+
+				const vars = new Array<DebugProtocol.Variable>();
+				//const id = this._variableHandles.get(args.variablesReference);
+				for (let v of variables) {
+					vars.push({
+						name: v.name,
+						type: v.type,
+						value: v.value,
+						variablesReference: 0
+					});
+				}
+
+				let response = this.pendingResponses.get(responseId);
+				if (response) {
+					this.pendingResponses.delete(responseId);
+					logger.log('Responding with the variables.');
+					response.body = {
+						variables: variables
+					};
+					this.sendResponse(response);
+				}
+			}
 			else if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_BREAK) {
-				logger.log('Receiving a breakpoint even.');
+				logger.log('Receiving a breakpoint event.');
 				this.sendEvent(new StoppedEvent('breakpoint', KromDebugSession.THREAD_ID));
 			}
 		});
@@ -332,10 +389,13 @@ export class KromDebugSession extends LoggingDebugSession {
 			});
 		}
 
-		response.body = {
+		/*response.body = {
 			variables: variables
 		};
-		this.sendResponse(response);
+		this.sendResponse(response);*/
+
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_VARIABLES, response.request_seq]);
+		this.pendingResponses.set(response.request_seq, response);
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
