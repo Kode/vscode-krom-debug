@@ -145,7 +145,6 @@ export class KromDebugSession extends LoggingDebugSession {
 		this.socket = net.connect(9191, 'localhost', () => {
 			logger.log('Connected');
 			this.sendResponse(response);
-			//this.socket.write('Hello');
 		});
 
 		this.socket.on('data', (data) => {
@@ -236,16 +235,16 @@ export class KromDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
+	private sendMessage(numbers: number[]): void {
+		this.socket.write(Buffer.from(Int32Array.from(numbers).buffer));
+	}
+
 	protected pauseRequest(response: DebugProtocol.PauseResponse, args: DebugProtocol.PauseArguments): void {
-		let array = new Int32Array(1);
-		array[0] = KromDebugSession.DEBUGGER_MESSAGE_PAUSE;
-		this.socket.write(Buffer.from(array.buffer));
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_PAUSE]);
 		this.sendResponse(response);
 	}
 
 	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
-
-		// runtime supports now threads so just return a default thread.
 		response.body = {
 			threads: [
 				new Thread(KromDebugSession.THREAD_ID, "thread 1")
@@ -256,29 +255,18 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
 		logger.log('Request stack trace (seq ' + response.request_seq + ').');
+
 		//const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 		//const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 		//const endFrame = startFrame + maxLevels;
 
-		//const stk = this._runtime.stack(startFrame, endFrame);
-
-		let array = new Int32Array(2);
-		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STACKTRACE;
-		array[1] = response.request_seq;
-		this.socket.write(Buffer.from(array.buffer));
-
-		/*response.body = {
-			//stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line))),
-			stackFrames: [new StackFrame(1, 'bla')],
-			//totalFrames: stk.count
-			totalFrames: 1
-		};
-		this.sendResponse(response);*/
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_STACKTRACE, response.request_seq]);
 		this.pendingResponses.set(response.request_seq, response);
 	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
 		logger.log('Request scopes (seq ' + response.request_seq + ').');
+
 		const frameReference = args.frameId;
 		const scopes = new Array<Scope>();
 		scopes.push(new Scope("Local", this._variableHandles.create("local_" + frameReference), false));
@@ -328,28 +316,17 @@ export class KromDebugSession extends LoggingDebugSession {
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
-		let array = new Int32Array(1);
-		array[0] = KromDebugSession.DEBUGGER_MESSAGE_CONTINUE;
-		this.socket.write(Buffer.from(array.buffer));
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_CONTINUE]);
 		this.sendResponse(response);
 	}
 
-	protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments) : void {
-		this._runtime.continue(true);
-		this.sendResponse(response);
- 	}
-
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-		let array = new Int32Array(1);
-		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STEP_OVER;
-		this.socket.write(Buffer.from(array.buffer));
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_STEP_OVER]);
 		this.sendResponse(response);
 	}
 
 	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
-		let array = new Int32Array(1);
-		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STEP_IN;
-		this.socket.write(Buffer.from(array.buffer));
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_STEP_IN]);
 		this.sendResponse(response);
 	}
 
