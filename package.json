@@ -12,17 +12,16 @@
 		"vscode": "^1.18.0",
 		"node": "^7.9.0"
 	},
-	"icon": "images/mock-debug-icon.png",
+	"icon": "images/icon.png",
 	"categories": [
 		"Debuggers"
 	],
-	"private": true,
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Microsoft/vscode-mock-debug.git"
+		"url": "https://github.com/Kode/vscode-krom-debug.git"
 	},
 	"bugs": {
-		"url": "https://github.com/Microsoft/vscode-mock-debug/issues"
+		"url": "https://github.com/Kode/vscode-krom-debug/issues"
 	},
 	"scripts": {
 		"prepublish": "tsc -p ./src",
@@ -51,8 +50,7 @@
 	},
 	"main": "./out/extension",
 	"activationEvents": [
-		"onDebug",
-		"onCommand:extension.mock-debug.getProgramName"
+		"onDebug"
 	],
 	"contributes": {
 		"breakpoints": [

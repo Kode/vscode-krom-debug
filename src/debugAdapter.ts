@@ -1,7 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
+ import { KromDebugSession } from './kromDebug';
 
- import { MockDebugSession } from './mockDebug';
-
- MockDebugSession.run(MockDebugSession);
+ KromDebugSession.run(KromDebugSession);

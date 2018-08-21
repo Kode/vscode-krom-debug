@@ -1,7 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
 import {
 	Logger, logger,
 	LoggingDebugSession,
@@ -31,10 +27,11 @@ interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	projectDir: string;
 }
 
-export class MockDebugSession extends LoggingDebugSession {
+export class KromDebugSession extends LoggingDebugSession {
 	private static DEBUGGER_MESSAGE_BREAKPOINT = 0;
 	private static DEBUGGER_MESSAGE_PAUSE = 1;
 	private static DEBUGGER_MESSAGE_STACKTRACE = 2;
+	private static DEBUGGER_MESSAGE_CONTINUE = 3;
 
 	private static IDE_MESSAGE_STACKTRACE = 0;
 	private static IDE_MESSAGE_BREAK = 1;
@@ -69,16 +66,16 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
-			this.sendEvent(new StoppedEvent('entry', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('entry', KromDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnStep', () => {
-			this.sendEvent(new StoppedEvent('step', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('step', KromDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('breakpoint', KromDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnException', () => {
-			this.sendEvent(new StoppedEvent('exception', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('exception', KromDebugSession.THREAD_ID));
 		});
 		this._runtime.on('breakpointValidated', (bp: MockBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', <DebugProtocol.Breakpoint>{ verified: bp.verified, id: bp.id }));
@@ -150,7 +147,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		this.socket.on('data', (data) => {
 			logger.log('Receiving data.');
-			if (data.readInt32LE(0) === MockDebugSession.IDE_MESSAGE_STACKTRACE) {
+			if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_STACKTRACE) {
 				let ii = 4;
 				logger.log('Receiving a stack trace');
 				let frames: any[] = [];
@@ -196,9 +193,9 @@ export class MockDebugSession extends LoggingDebugSession {
 					this.stackTraceResponse = null;
 				}
 			}
-			else if (data.readInt32LE(0) === MockDebugSession.IDE_MESSAGE_BREAK) {
+			else if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_BREAK) {
 				logger.log('Receiving a breakpoint');
-				this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+				this.sendEvent(new StoppedEvent('breakpoint', KromDebugSession.THREAD_ID));
 			}
 		});
 
@@ -216,7 +213,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			let line = this.convertClientLineToDebugger(l);
 
 			let array = new Int32Array(2);
-			array[0] = MockDebugSession.DEBUGGER_MESSAGE_BREAKPOINT;
+			array[0] = KromDebugSession.DEBUGGER_MESSAGE_BREAKPOINT;
 			array[1] = line;
 			this.socket.write(Buffer.from(array.buffer));
 
@@ -235,8 +232,9 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected pauseRequest(response: DebugProtocol.PauseResponse, args: DebugProtocol.PauseArguments): void {
 		let array = new Int32Array(1);
-		array[0] = MockDebugSession.DEBUGGER_MESSAGE_PAUSE;
+		array[0] = KromDebugSession.DEBUGGER_MESSAGE_PAUSE;
 		this.socket.write(Buffer.from(array.buffer));
+		this.sendResponse(response);
 	}
 
 	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -244,7 +242,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// runtime supports now threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.THREAD_ID, "thread 1")
+				new Thread(KromDebugSession.THREAD_ID, "thread 1")
 			]
 		};
 		this.sendResponse(response);
@@ -259,7 +257,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		//const stk = this._runtime.stack(startFrame, endFrame);
 
 		let array = new Int32Array(1);
-		array[0] = MockDebugSession.DEBUGGER_MESSAGE_STACKTRACE;
+		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STACKTRACE;
 		this.socket.write(Buffer.from(array.buffer));
 
 		/*response.body = {
@@ -323,7 +321,9 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
-		this._runtime.continue();
+		let array = new Int32Array(1);
+		array[0] = KromDebugSession.DEBUGGER_MESSAGE_CONTINUE;
+		this.socket.write(Buffer.from(array.buffer));
 		this.sendResponse(response);
 	}
 
@@ -339,40 +339,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
 		this._runtime.step(true);
-		this.sendResponse(response);
-	}
-
-	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
-
-		let reply: string | undefined = undefined;
-
-		if (args.context === 'repl') {
-			// 'evaluate' supports to create and delete breakpoints from the 'repl':
-			const matches = /new +([0-9]+)/.exec(args.expression);
-			if (matches && matches.length === 2) {
-				const mbp = this._runtime.setBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-				const bp = <DebugProtocol.Breakpoint> new Breakpoint(mbp.verified, this.convertDebuggerLineToClient(mbp.line), undefined, this.createSource(this._runtime.sourceFile));
-				bp.id= mbp.id;
-				this.sendEvent(new BreakpointEvent('new', bp));
-				reply = `breakpoint created`;
-			} else {
-				const matches = /del +([0-9]+)/.exec(args.expression);
-				if (matches && matches.length === 2) {
-					const mbp = this._runtime.clearBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-					if (mbp) {
-						const bp = <DebugProtocol.Breakpoint> new Breakpoint(false);
-						bp.id= mbp.id;
-						this.sendEvent(new BreakpointEvent('removed', bp));
-						reply = `breakpoint deleted`;
-					}
-				}
-			}
-		}
-
-		response.body = {
-			result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
-			variablesReference: 0
-		};
 		this.sendResponse(response);
 	}
 
