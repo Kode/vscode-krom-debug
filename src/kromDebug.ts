@@ -7,8 +7,10 @@ import {
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
+import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
+import * as source_map from 'source-map';
 const { Subject } = require('await-notify');
 
 /**
@@ -49,6 +51,8 @@ export class KromDebugSession extends LoggingDebugSession {
 	private _variableHandles = new Handles<string>();
 
 	private _configurationDone = new Subject();
+
+	private sourceMap: source_map.SourceMapConsumer;
 
 	private socket: net.Socket;
 
@@ -142,6 +146,9 @@ export class KromDebugSession extends LoggingDebugSession {
 		await this._configurationDone.wait(1000);
 
 		logger.log('Connecting...');
+
+		this.sourceMap = await new source_map.SourceMapConsumer(fs.readFileSync(path.join(args.projectDir, 'build', 'krom', 'krom.js.temp.map'), 'utf8'));
+
 		this.socket = net.connect(9191, 'localhost', () => {
 			logger.log('Connected');
 			this.sendResponse(response);
@@ -159,8 +166,8 @@ export class KromDebugSession extends LoggingDebugSession {
 				for (let i = 0; i < length; ++i) {
 					const index = data.readInt32LE(ii); ii += 4;
 					const scriptId = data.readInt32LE(ii); ii += 4;
-					const line = data.readInt32LE(ii); ii += 4;
-					const column = data.readInt32LE(ii); ii += 4;
+					let line = data.readInt32LE(ii); ii += 4;
+					let column = data.readInt32LE(ii); ii += 4;
 					const sourceLength = data.readInt32LE(ii); ii += 4;
 					const functionHandle = data.readInt32LE(ii); ii += 4;
 					const stringLength = data.readInt32LE(ii); ii += 4;
@@ -168,6 +175,9 @@ export class KromDebugSession extends LoggingDebugSession {
 					for (let j = 0; j < stringLength; ++j) {
 						str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
 					}
+
+					const original = this.sourceMap.originalPositionFor({ line: line, column: column });
+
 					frames.push({
 						index: index,
 						scriptId: scriptId,
@@ -175,7 +185,11 @@ export class KromDebugSession extends LoggingDebugSession {
 						column: column,
 						sourceLength: sourceLength,
 						functionHandle: functionHandle,
-						sourceText: str
+						sourceText: str,
+						originalLine: original.line,
+						originalColumn: original.column,
+						originalSource: original.source,
+						originalName: original.name
 					});
 				}
 				let response = this.pendingResponses.get(responseId);
@@ -185,11 +199,7 @@ export class KromDebugSession extends LoggingDebugSession {
 
 					let stackFrames: StackFrame[] = [];
 					for (let frame of frames) {
-						let khaPath = '';
-						if (args.projectDir) {
-							khaPath = path.join(args.projectDir, 'build', 'krom', 'krom.js');
-						}
-						stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', khaPath), frame.line, frame.column));
+						stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', frame.originalSource), frame.originalLine, frame.originalColumn));
 					}
 					response.body = {
 						stackFrames: stackFrames,
@@ -216,11 +226,24 @@ export class KromDebugSession extends LoggingDebugSession {
 
 		const actualBreakpoints = clientLines.map(l => {
 			let line = this.convertClientLineToDebugger(l);
+			let path: string = args.source.path ? args.source.path : '';
+			path = path.replace(/\\/g, '/');
 
-			let array = new Int32Array(2);
-			array[0] = KromDebugSession.DEBUGGER_MESSAGE_BREAKPOINT;
-			array[1] = line;
-			this.socket.write(Buffer.from(array.buffer));
+			let pos = this.sourceMap.generatedPositionFor({
+				source: 'file:///' + path.charAt(0).toUpperCase() + path.substr(1),
+				line: line,
+				column: 0
+			});
+
+			if (pos.line === null) {
+				pos = this.sourceMap.generatedPositionFor({
+					source: 'file:///' + path.charAt(0).toLowerCase() + path.substr(1),
+					line: line,
+					column: 0
+				});
+			}
+
+			this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_BREAKPOINT, pos.line ? pos.line : 0]);
 
 			let verified = true;
 			let id = 0;
