@@ -34,7 +34,9 @@
 		"publish": "vsce publish"
 	},
 	"dependencies": {
+		"@types/source-map": "^0.5.7",
 		"await-notify": "1.0.1",
+		"source-map": "^0.7.3",
 		"vscode-debugadapter": "1.27.0",
 		"vscode-debugprotocol": "1.27.0"
 	},
