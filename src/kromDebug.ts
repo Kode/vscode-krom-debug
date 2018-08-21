@@ -32,6 +32,9 @@ export class KromDebugSession extends LoggingDebugSession {
 	private static DEBUGGER_MESSAGE_PAUSE = 1;
 	private static DEBUGGER_MESSAGE_STACKTRACE = 2;
 	private static DEBUGGER_MESSAGE_CONTINUE = 3;
+	private static DEBUGGER_MESSAGE_STEP_OVER = 4;
+	private static DEBUGGER_MESSAGE_STEP_IN = 5;
+	private static DEBUGGER_MESSAGE_STEP_OUT = 6;
 
 	private static IDE_MESSAGE_STACKTRACE = 0;
 	private static IDE_MESSAGE_BREAK = 1;
@@ -333,12 +336,23 @@ export class KromDebugSession extends LoggingDebugSession {
  	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-		this._runtime.step();
+		let array = new Int32Array(1);
+		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STEP_OVER;
+		this.socket.write(Buffer.from(array.buffer));
 		this.sendResponse(response);
 	}
 
-	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
-		this._runtime.step(true);
+	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
+		let array = new Int32Array(1);
+		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STEP_IN;
+		this.socket.write(Buffer.from(array.buffer));
+		this.sendResponse(response);
+	}
+
+    protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
+		let array = new Int32Array(1);
+		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STEP_OUT;
+		this.socket.write(Buffer.from(array.buffer));
 		this.sendResponse(response);
 	}
 
