@@ -28,6 +28,11 @@ interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	projectDir: string;
 }
 
+class BreakpointRequest {
+	response: DebugProtocol.SetBreakpointsResponse;
+	args: DebugProtocol.SetBreakpointsArguments;
+}
+
 export class KromDebugSession extends LoggingDebugSession {
 	private static DEBUGGER_MESSAGE_BREAKPOINT = 0;
 	private static DEBUGGER_MESSAGE_PAUSE = 1;
@@ -55,12 +60,16 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	private pendingResponses: Map<number, DebugProtocol.Response> = new Map();
 
+	private connected = false;
+
+	private pendingBreakPointRequests: Array<BreakpointRequest> = [];
+
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
 	 */
 	public constructor() {
-		super("mock-debug.txt");
+		super("krom.txt");
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(false);
@@ -101,24 +110,13 @@ export class KromDebugSession extends LoggingDebugSession {
 	 * to interrogate the features the debug adapter provides.
 	 */
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
-
-		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
 
-		// the adapter implements the configurationDoneRequest.
 		response.body.supportsConfigurationDoneRequest = true;
-
-		// make VS Code to use 'evaluate' when hovering over source
-		response.body.supportsEvaluateForHovers = true;
-
-		// make VS Code to show a 'step back' button
-		response.body.supportsStepBack = true;
+		response.body.supportsEvaluateForHovers = false;
+		response.body.supportsStepBack = false;
 
 		this.sendResponse(response);
-
-		// since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
-		// we request them early by sending an 'initializeRequest' to the frontend.
-		// The frontend will end the configuration sequence by calling 'configurationDone' request.
 		this.sendEvent(new InitializedEvent());
 	}
 
@@ -148,6 +146,11 @@ export class KromDebugSession extends LoggingDebugSession {
 
 		this.socket = net.connect(9191, 'localhost', () => {
 			logger.log('Connected');
+			this.connected = true;
+			for (let breakpointRequest of this.pendingBreakPointRequests) {
+				this.setBreakPoint(breakpointRequest);
+			}
+			this.pendingBreakPointRequests = [];
 			this.sendResponse(response);
 		});
 
@@ -272,14 +275,13 @@ export class KromDebugSession extends LoggingDebugSession {
 		});
 	}
 
-	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
-
+	private setBreakPoint(request: BreakpointRequest): void {
 		//const path = <string>args.source.path;
-		const clientLines = args.lines || [];
+		const clientLines = request.args.lines || [];
 
 		const actualBreakpoints = clientLines.map(l => {
 			let line = this.convertClientLineToDebugger(l);
-			let path: string = args.source.path ? args.source.path : '';
+			let path: string = request.args.source.path ? request.args.source.path : '';
 			path = path.replace(/\\/g, '/');
 
 			let pos = this.sourceMap.generatedPositionFor({
@@ -305,10 +307,19 @@ export class KromDebugSession extends LoggingDebugSession {
 			return bp;
 		});
 
-		response.body = {
+		request.response.body = {
 			breakpoints: actualBreakpoints
 		};
-		this.sendResponse(response);
+		this.sendResponse(request.response);
+	}
+
+	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
+		if (this.connected) {
+			this.setBreakPoint({response, args});
+		}
+		else {
+			this.pendingBreakPointRequests.push({response, args});
+		}
 	}
 
 	private sendMessage(numbers: number[]): void {
