@@ -6,7 +6,6 @@ import {
 } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
-import { MockRuntime, MockBreakpoint } from './mockRuntime';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
@@ -46,9 +45,6 @@ export class KromDebugSession extends LoggingDebugSession {
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
 
-	// a Mock runtime (or debugger)
-	private _runtime: MockRuntime;
-
 	private _variableHandles = new Handles<string>();
 
 	private _configurationDone = new Subject();
@@ -70,7 +66,7 @@ export class KromDebugSession extends LoggingDebugSession {
 		this.setDebuggerLinesStartAt1(false);
 		this.setDebuggerColumnsStartAt1(false);
 
-		this._runtime = new MockRuntime();
+		/*this._runtime = new MockRuntime();
 
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
@@ -97,7 +93,7 @@ export class KromDebugSession extends LoggingDebugSession {
 		});
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
-		});
+		});*/
 	}
 
 	/**
@@ -414,15 +410,11 @@ export class KromDebugSession extends LoggingDebugSession {
 	}
 
     protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
-		let array = new Int32Array(1);
-		array[0] = KromDebugSession.DEBUGGER_MESSAGE_STEP_OUT;
-		this.socket.write(Buffer.from(array.buffer));
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_STEP_OUT]);
 		this.sendResponse(response);
 	}
 
-	//---- helpers
-
-	private createSource(filePath: string): Source {
-		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
-	}
+	//private createSource(filePath: string): Source {
+	//	return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+	//}
 }
