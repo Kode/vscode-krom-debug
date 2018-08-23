@@ -48,6 +48,11 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 			config.projectDir = folder.uri.fsPath;
 		}
 
+		let kromExtension = vscode.extensions.getExtension('kodetech.krom');
+		if (kromExtension) {
+			config.kromDir = kromExtension.exports.findKrom();
+		}
+
 		if (EMBED_DEBUG_ADAPTER) {
 			// start port listener on launch of first debug session
 			if (!this._server) {

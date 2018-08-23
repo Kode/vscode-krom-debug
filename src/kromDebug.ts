@@ -6,6 +6,7 @@ import {
 } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
+import * as child_process from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
@@ -19,13 +20,13 @@ const { Subject } = require('await-notify');
  * The interface should always match this schema.
  */
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** An absolute path to the "program" to debug. */
-	program?: string;
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
 	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
-	projectDir: string;
+	projectDir?: string;
+	kromDir?: string;
+	port?: number;
 }
 
 class BreakpointRequest {
@@ -136,17 +137,23 @@ export class KromDebugSession extends LoggingDebugSession {
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-		logger.setup(Logger.LogLevel.Verbose, false);
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		//logger.setup(Logger.LogLevel.Verbose, false);
 
 		// wait until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
 		logger.log('Connecting...');
 
-		this.sourceMap = await new source_map.SourceMapConsumer(fs.readFileSync(path.join(args.projectDir, 'build', 'krom', 'krom.js.temp.map'), 'utf8'));
+		this.sourceMap = await new source_map.SourceMapConsumer(fs.readFileSync(path.join(args.projectDir ? args.projectDir : '', 'build', 'krom', 'krom.js.temp.map'), 'utf8'));
 
-		this.socket = net.connect(9191, 'localhost', () => {
+		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
+
+		if (args.kromDir && args.projectDir) {
+			child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+		}
+
+		this.socket = net.connect(port, 'localhost', () => {
 			logger.log('Connected');
 			this.connected = true;
 			for (let breakpointRequest of this.pendingBreakPointRequests) {
@@ -202,11 +209,7 @@ export class KromDebugSession extends LoggingDebugSession {
 					let stackFrames: StackFrame[] = [];
 					for (let frame of frames) {
 						if (frame.originalLine === null) {
-							let khaPath = '';
-							if (args.projectDir) {
-								khaPath = path.join(args.projectDir, 'build', 'krom', 'krom.js');
-							}
-							stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', khaPath), frame.line, frame.column));
+							stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', path.join(args.projectDir ? args.projectDir : '', 'build', 'krom', 'krom.js')), frame.line, frame.column));
 						}
 						else {
 							stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', frame.originalSource), frame.originalLine, frame.originalColumn));
