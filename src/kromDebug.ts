@@ -47,6 +47,7 @@ export class KromDebugSession extends LoggingDebugSession {
 	private static IDE_MESSAGE_STACKTRACE = 0;
 	private static IDE_MESSAGE_BREAK = 1;
 	private static IDE_MESSAGE_VARIABLES = 2;
+	private static IDE_MESSAGE_LOG = 3;
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
@@ -268,6 +269,20 @@ export class KromDebugSession extends LoggingDebugSession {
 			else if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_BREAK) {
 				logger.log('Receiving a breakpoint event.');
 				this.sendEvent(new StoppedEvent('breakpoint', KromDebugSession.THREAD_ID));
+			}
+			else if (data.readInt32LE(0) === KromDebugSession.IDE_MESSAGE_LOG) {
+				let ii = 4;
+				let stringLength = data.readInt32LE(ii); ii += 4;
+				let str = '';
+				for (let j = 0; j < stringLength; ++j) {
+					str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
+				}
+
+				const e: DebugProtocol.OutputEvent = new OutputEvent(`${str}\n`);
+				//e.body.source = this.createSource(filePath);
+				//e.body.line = this.convertDebuggerLineToClient(line);
+				//e.body.column = this.convertDebuggerColumnToClient(column);
+				this.sendEvent(e);
 			}
 		});
 
