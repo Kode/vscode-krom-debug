@@ -74,8 +74,8 @@ export class KromDebugSession extends LoggingDebugSession {
 		super("krom.txt");
 
 		// this debugger uses zero-based lines and columns
-		this.setDebuggerLinesStartAt1(false);
-		this.setDebuggerColumnsStartAt1(false);
+		this.setDebuggerLinesStartAt1(true);
+		this.setDebuggerColumnsStartAt1(true);
 
 		/*this._runtime = new MockRuntime();
 
@@ -315,7 +315,7 @@ export class KromDebugSession extends LoggingDebugSession {
 					column: 0
 				});
 			}
-
+logger.log('Mapped line: ' + l + ' ' + line + ' ' + pos.line);
 			this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_BREAKPOINT, pos.line ? pos.line : 0]);
 
 			let verified = true;
