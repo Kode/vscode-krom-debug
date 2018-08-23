@@ -201,7 +201,16 @@ export class KromDebugSession extends LoggingDebugSession {
 
 					let stackFrames: StackFrame[] = [];
 					for (let frame of frames) {
-						stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', frame.originalSource), frame.originalLine, frame.originalColumn));
+						if (frame.originalLine === null) {
+							let khaPath = '';
+							if (args.projectDir) {
+								khaPath = path.join(args.projectDir, 'build', 'krom', 'krom.js');
+							}
+							stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', khaPath), frame.line, frame.column));
+						}
+						else {
+							stackFrames.push(new StackFrame(frame.index, frame.sourceText, new Source('krom.js', frame.originalSource), frame.originalLine, frame.originalColumn));
+						}
 					}
 					response.body = {
 						stackFrames: stackFrames,
@@ -315,8 +324,8 @@ export class KromDebugSession extends LoggingDebugSession {
 					column: 0
 				});
 			}
-logger.log('Mapped line: ' + l + ' ' + line + ' ' + pos.line);
-			this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_BREAKPOINT, pos.line ? pos.line : 0]);
+
+			this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_BREAKPOINT, pos.line ? pos.line : line]);
 
 			let verified = true;
 			let id = 0;
