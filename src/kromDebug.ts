@@ -13,12 +13,6 @@ import * as path from 'path';
 import * as source_map from 'source-map';
 const { Subject } = require('await-notify');
 
-/**
- * This interface describes the mock-debug specific launch attributes
- * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
- * The interface should always match this schema.
- */
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
@@ -50,7 +44,6 @@ export class KromDebugSession extends LoggingDebugSession {
 	private static IDE_MESSAGE_VARIABLES = 2;
 	private static IDE_MESSAGE_LOG = 3;
 
-	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
 
 	private _variableHandles = new Handles<string>();
@@ -67,10 +60,8 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	private pendingBreakPointRequests: Array<BreakpointRequest> = [];
 
-	/**
-	 * Creates a new debug adapter that is used for one debug session.
-	 * We configure the default implementation of a debug adapter here.
-	 */
+	private reconnectionAttempts = 5;
+
 	public constructor() {
 		super("krom.txt");
 
@@ -78,8 +69,7 @@ export class KromDebugSession extends LoggingDebugSession {
 		this.setDebuggerLinesStartAt1(true);
 		this.setDebuggerColumnsStartAt1(true);
 
-		/*this._runtime = new MockRuntime();
-
+		/*
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
 			this.sendEvent(new StoppedEvent('entry', KromDebugSession.THREAD_ID));
@@ -96,22 +86,9 @@ export class KromDebugSession extends LoggingDebugSession {
 		this._runtime.on('breakpointValidated', (bp: MockBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', <DebugProtocol.Breakpoint>{ verified: bp.verified, id: bp.id }));
 		});
-		this._runtime.on('output', (text, filePath, line, column) => {
-			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`);
-			e.body.source = this.createSource(filePath);
-			e.body.line = this.convertDebuggerLineToClient(line);
-			e.body.column = this.convertDebuggerColumnToClient(column);
-			this.sendEvent(e);
-		});
-		this._runtime.on('end', () => {
-			this.sendEvent(new TerminatedEvent());
-		});*/
+		*/
 	}
 
-	/**
-	 * The 'initialize' request is the first request called by the frontend
-	 * to interrogate the features the debug adapter provides.
-	 */
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
 		response.body = response.body || {};
 
@@ -123,36 +100,12 @@ export class KromDebugSession extends LoggingDebugSession {
 		this.sendEvent(new InitializedEvent());
 	}
 
-	/**
-	 * Called at the end of the configuration sequence.
-	 * Indicates that all breakpoints etc. have been sent to the DA and that the 'launch' can start.
-	 */
 	protected configurationDoneRequest(response: DebugProtocol.ConfigurationDoneResponse, args: DebugProtocol.ConfigurationDoneArguments): void {
 		super.configurationDoneRequest(response, args);
-
-		// notify the launchRequest that configuration has finished
 		this._configurationDone.notify();
 	}
 
-	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
-
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-		//logger.setup(Logger.LogLevel.Verbose, false);
-
-		// wait until configuration has finished (and configurationDoneRequest has been called)
-		await this._configurationDone.wait(1000);
-
-		logger.log('Connecting...');
-
-		this.sourceMap = await new source_map.SourceMapConsumer(fs.readFileSync(path.join(args.projectDir ? args.projectDir : '', 'build', 'krom', 'krom.js.temp.map'), 'utf8'));
-
-		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
-
-		if (args.kromDir && args.projectDir) {
-			child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
-		}
-
+	private connect(port: number, response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments): void {
 		this.socket = net.connect(port, 'localhost', () => {
 			logger.log('Connected');
 			this.connected = true;
@@ -298,9 +251,39 @@ export class KromDebugSession extends LoggingDebugSession {
 			}
 		});
 
-		this.socket.on('end', () => {
-
+		this.socket.on('error', (err) => {
+			logger.log('Connection error: ' + err.message);
+			if (!this.connected && this.reconnectionAttempts > 0) {
+				--this.reconnectionAttempts;
+				this.connect(port, response, args);
+			}
 		});
+
+		this.socket.on('end', () => {
+			this.sendEvent(new TerminatedEvent());
+		});
+	}
+
+	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		//logger.setup(Logger.LogLevel.Verbose, false);
+
+		await this._configurationDone.wait(1000);
+
+		logger.log('Connecting...');
+
+		this.sourceMap = await new source_map.SourceMapConsumer(fs.readFileSync(path.join(args.projectDir ? args.projectDir : '', 'build', 'krom', 'krom.js.temp.map'), 'utf8'));
+
+		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
+
+		if (args.kromDir && args.projectDir) {
+			let child = child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+			child.on('exit', () => {
+				this.sendEvent(new TerminatedEvent());
+			});
+		}
+
+		this.connect(port, response, args);
 	}
 
 	private setBreakPoints(request: BreakpointRequest): void {

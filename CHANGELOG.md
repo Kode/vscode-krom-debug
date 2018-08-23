@@ -1,3 +1,7 @@
+### 18.8.1
+
+Retry initial connect and end gracefully
+
 ### 18.8.0
 
 Initial Chakra based release
