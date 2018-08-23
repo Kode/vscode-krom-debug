@@ -42,6 +42,7 @@ export class KromDebugSession extends LoggingDebugSession {
 	private static DEBUGGER_MESSAGE_STEP_IN = 5;
 	private static DEBUGGER_MESSAGE_STEP_OUT = 6;
 	private static DEBUGGER_MESSAGE_VARIABLES = 7;
+	private static DEBUGGER_MESSAGE_CLEAR_BREAKPOINTS = 8;
 
 	private static IDE_MESSAGE_STACKTRACE = 0;
 	private static IDE_MESSAGE_BREAK = 1;
@@ -148,7 +149,7 @@ export class KromDebugSession extends LoggingDebugSession {
 			logger.log('Connected');
 			this.connected = true;
 			for (let breakpointRequest of this.pendingBreakPointRequests) {
-				this.setBreakPoint(breakpointRequest);
+				this.setBreakPoints(breakpointRequest);
 			}
 			this.pendingBreakPointRequests = [];
 			this.sendResponse(response);
@@ -275,7 +276,9 @@ export class KromDebugSession extends LoggingDebugSession {
 		});
 	}
 
-	private setBreakPoint(request: BreakpointRequest): void {
+	private setBreakPoints(request: BreakpointRequest): void {
+		this.sendMessage([KromDebugSession.DEBUGGER_MESSAGE_CLEAR_BREAKPOINTS]);
+
 		//const path = <string>args.source.path;
 		const clientLines = request.args.lines || [];
 
@@ -315,7 +318,7 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
 		if (this.connected) {
-			this.setBreakPoint({response, args});
+			this.setBreakPoints({response, args});
 		}
 		else {
 			this.pendingBreakPointRequests.push({response, args});
