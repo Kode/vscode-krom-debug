@@ -1,11 +1,10 @@
 import {
 	Logger, logger,
 	LoggingDebugSession,
-	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
+	InitializedEvent, TerminatedEvent, StoppedEvent, OutputEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
-import { basename } from 'path';
 import * as child_process from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
@@ -14,10 +13,8 @@ import * as source_map from 'source-map';
 const { Subject } = require('await-notify');
 
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** Automatically stop target after launch. If not specified, target does not stop. */
-	stopOnEntry?: boolean;
-	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
+	noKromLaunch?: boolean;
 	projectDir?: string;
 	kromDir?: string;
 	port?: number;
@@ -276,7 +273,7 @@ export class KromDebugSession extends LoggingDebugSession {
 
 		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
 
-		if (args.kromDir && args.projectDir) {
+		if (args.kromDir && args.projectDir && !args.noKromLaunch) {
 			let child = child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
 			child.on('exit', () => {
 				this.sendEvent(new TerminatedEvent());
@@ -439,6 +436,6 @@ export class KromDebugSession extends LoggingDebugSession {
 	}
 
 	//private createSource(filePath: string): Source {
-	//	return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+	//	return new Source(path.basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
 	//}
 }
