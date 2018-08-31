@@ -1,3 +1,7 @@
+### 18.8.3
+
+Wait a little when connecting
+
 ### 18.8.2
 
 Launch Krom on all systems

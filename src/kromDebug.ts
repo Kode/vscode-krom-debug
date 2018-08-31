@@ -15,9 +15,11 @@ const { Subject } = require('await-notify');
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	trace?: boolean;
 	noKromLaunch?: boolean;
+	port?: number;
+
+	// Set by the extension itself
 	projectDir?: string;
 	kromDir?: string;
-	port?: number;
 }
 
 class BreakpointRequest {
@@ -57,7 +59,7 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	private pendingBreakPointRequests: Array<BreakpointRequest> = [];
 
-	private reconnectionAttempts = 5;
+	private reconnectionAttempts = 15;
 
 	public constructor() {
 		super("krom.txt");
@@ -103,6 +105,7 @@ export class KromDebugSession extends LoggingDebugSession {
 	}
 
 	private connect(port: number, response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments): void {
+		logger.log('Really connecting...');
 		this.socket = net.connect(port, 'localhost', () => {
 			logger.log('Connected');
 			this.connected = true;
@@ -252,7 +255,9 @@ export class KromDebugSession extends LoggingDebugSession {
 			logger.log('Connection error: ' + err.message);
 			if (!this.connected && this.reconnectionAttempts > 0) {
 				--this.reconnectionAttempts;
-				this.connect(port, response, args);
+				setTimeout(() => {
+					this.connect(port, response, args);
+				}, 1000);
 			}
 		});
 

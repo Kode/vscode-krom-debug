@@ -1,7 +1,7 @@
 {
 	"name": "krom-debug",
 	"displayName": "Debugger for Krom",
-	"version": "18.8.2",
+	"version": "18.8.3",
 	"publisher": "kodetech",
 	"description": "Debug your JavaScript code in Krom.",
 	"license": "SEE LICENSE IN LICENSE.txt",
@@ -72,20 +72,20 @@
 							"program"
 						],
 						"properties": {
-							"program": {
-								"type": "string",
-								"description": "Absolute path to a text file.",
-								"default": "${workspaceFolder}/${command:AskForProgramName}"
-							},
-							"stopOnEntry": {
-								"type": "boolean",
-								"description": "Automatically stop after launch.",
-								"default": true
-							},
 							"trace": {
 								"type": "boolean",
 								"description": "Enable logging of the Debug Adapter Protocol.",
 								"default": true
+							},
+							"noKromLaunch": {
+								"type": "boolean",
+								"description": "Do not launch Krom. Can be used to connect to a running instance.",
+								"default": false
+							},
+							"port": {
+								"type": "number",
+								"description": "Manually set the debug port (it's randomized by default).",
+								"default": 0
 							}
 						}
 					}
