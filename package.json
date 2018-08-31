@@ -1,7 +1,7 @@
 {
 	"name": "krom-debug",
 	"displayName": "Debugger for Krom",
-	"version": "18.8.1",
+	"version": "18.8.2",
 	"publisher": "kodetech",
 	"description": "Debug your JavaScript code in Krom.",
 	"license": "SEE LICENSE IN LICENSE.txt",

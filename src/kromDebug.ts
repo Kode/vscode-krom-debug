@@ -204,7 +204,7 @@ export class KromDebugSession extends LoggingDebugSession {
 						name,
 						type,
 						value
-					})
+					});
 				}
 
 				const vars = new Array<DebugProtocol.Variable>();
@@ -274,7 +274,16 @@ export class KromDebugSession extends LoggingDebugSession {
 		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
 
 		if (args.kromDir && args.projectDir && !args.noKromLaunch) {
-			let child = child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+			let child: child_process.ChildProcess;
+			if (process.platform === 'win32') {
+				child = child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+			}
+			else if (process.platform === 'darwin') {
+				child = child_process.spawn(path.join(args.kromDir, 'Krom.app', 'Contents', 'MacOS', 'Krom'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+			}
+			else {
+				child = child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+			}
 			child.on('exit', () => {
 				this.sendEvent(new TerminatedEvent());
 			});

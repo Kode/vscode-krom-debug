@@ -1,3 +1,7 @@
+### 18.8.2
+
+Launch Krom on all systems
+
 ### 18.8.1
 
 Retry initial connect and end gracefully
