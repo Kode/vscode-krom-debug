@@ -1,3 +1,7 @@
+### 18.8.4
+
+Fix Linux Krom launch
+
 ### 18.8.3
 
 Wait a little when connecting

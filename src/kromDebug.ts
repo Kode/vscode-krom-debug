@@ -287,7 +287,7 @@ export class KromDebugSession extends LoggingDebugSession {
 				child = child_process.spawn(path.join(args.kromDir, 'Krom.app', 'Contents', 'MacOS', 'Krom'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
 			}
 			else {
-				child = child_process.spawn(path.join(args.kromDir, 'Krom.exe'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
+				child = child_process.spawn(path.join(args.kromDir, 'Krom'), [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()]);
 			}
 			child.on('exit', () => {
 				this.sendEvent(new TerminatedEvent());
