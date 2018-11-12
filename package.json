@@ -1,7 +1,7 @@
 {
 	"name": "krom-debug",
 	"displayName": "Debugger for Krom",
-	"version": "18.11.0",
+	"version": "18.11.1",
 	"publisher": "kodetech",
 	"description": "Debug your JavaScript code in Krom.",
 	"license": "SEE LICENSE IN LICENSE.txt",
@@ -68,9 +68,6 @@
 				"runtime": "node",
 				"configurationAttributes": {
 					"launch": {
-						"required": [
-							"program"
-						],
 						"properties": {
 							"trace": {
 								"type": "boolean",

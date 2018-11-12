@@ -1,3 +1,7 @@
+### 18.11.1
+
+Remove unused program parameter
+
 ### 18.11.0
 
 Send the start message required by new Krom releases
