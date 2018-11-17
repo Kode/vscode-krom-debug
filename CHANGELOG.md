@@ -1,6 +1,6 @@
 ### 18.11.2
 
-Support a sound option
+Support a sound option and attach requests
 
 ### 18.11.1
 

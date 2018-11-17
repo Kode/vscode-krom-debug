@@ -14,7 +14,16 @@ const { Subject } = require('await-notify');
 
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	trace?: boolean;
-	noKromLaunch?: boolean;
+	port?: number;
+	sound?: boolean;
+
+	// Set by the extension itself
+	projectDir?: string;
+	kromDir?: string;
+}
+
+interface AttachRequestArguments extends DebugProtocol.AttachRequestArguments {
+	trace?: boolean;
 	port?: number;
 	sound?: boolean;
 
@@ -273,7 +282,6 @@ export class KromDebugSession extends LoggingDebugSession {
 
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-		//logger.setup(Logger.LogLevel.Verbose, false);
 
 		await this._configurationDone.wait(1000);
 
@@ -283,7 +291,7 @@ export class KromDebugSession extends LoggingDebugSession {
 
 		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
 
-		if (args.kromDir && args.projectDir && !args.noKromLaunch) {
+		if (args.kromDir && args.projectDir) {
 			let child: child_process.ChildProcess;
 			let kromArgs = [path.join(args.projectDir, 'build', 'krom'), path.join(args.projectDir, 'build', 'krom-resources'), '--debug', port.toString()];
 			if (args.sound) {
@@ -302,6 +310,20 @@ export class KromDebugSession extends LoggingDebugSession {
 				this.sendEvent(new TerminatedEvent());
 			});
 		}
+
+		this.connect(port, response, args);
+	}
+
+	protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments) {
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+
+		await this._configurationDone.wait(1000);
+
+		logger.log('Connecting...');
+
+		this.sourceMap = await new source_map.SourceMapConsumer(fs.readFileSync(path.join(args.projectDir ? args.projectDir : '', 'build', 'krom', 'krom.js.temp.map'), 'utf8'));
+
+		const port = args.port || Math.floor((Math.random() * 10000) + 10000);
 
 		this.connect(port, response, args);
 	}
