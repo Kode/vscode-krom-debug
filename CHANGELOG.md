@@ -1,3 +1,7 @@
+### 18.11.2
+
+Support a sound option
+
 ### 18.11.1
 
 Remove unused program parameter
