@@ -1,7 +1,7 @@
 {
 	"name": "krom-debug",
 	"displayName": "Debugger for Krom",
-	"version": "18.11.2",
+	"version": "18.11.3",
 	"publisher": "kodetech",
 	"description": "Debug your JavaScript code in Krom.",
 	"license": "SEE LICENSE IN LICENSE.txt",
@@ -77,6 +77,28 @@
 							"port": {
 								"type": "number",
 								"description": "Manually set the debug port (it's randomized by default).",
+								"default": 0
+							},
+							"sound": {
+								"type": "boolean",
+								"description": "Sound is still problematic in Krom, therefore it's off by default. Feel free to try your luck though.",
+								"default": false
+							}
+						}
+					},
+					"attach": {
+						"required": [
+              				"port"
+            			],
+						"properties": {
+							"trace": {
+								"type": "boolean",
+								"description": "Enable logging of the Debug Adapter Protocol.",
+								"default": true
+							},
+							"port": {
+								"type": "number",
+								"description": "Set the debug port.",
 								"default": 0
 							},
 							"sound": {
