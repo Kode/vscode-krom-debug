@@ -1,3 +1,7 @@
+### 20.6.0
+
+Support super-long log messages
+
 ### 18.11.3
 
 Add the attach options
