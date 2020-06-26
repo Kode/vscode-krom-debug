@@ -38,7 +38,7 @@ class BreakpointRequest {
 }
 
 export class KromDebugSession extends LoggingDebugSession {
-	private static KROM_DEBUG_API = 1;
+	private static KROM_DEBUG_API = 2;
 
 	private static DEBUGGER_MESSAGE_BREAKPOINT = 0;
 	private static DEBUGGER_MESSAGE_PAUSE = 1;
@@ -257,7 +257,7 @@ export class KromDebugSession extends LoggingDebugSession {
 					str += String.fromCharCode(data.readInt32LE(ii)); ii += 4;
 				}
 
-				const e: DebugProtocol.OutputEvent = new OutputEvent(`${str}\n`);
+				const e: DebugProtocol.OutputEvent = new OutputEvent(`${str}`);
 				//e.body.source = this.createSource(filePath);
 				//e.body.line = this.convertDebuggerLineToClient(line);
 				//e.body.column = this.convertDebuggerColumnToClient(column);
